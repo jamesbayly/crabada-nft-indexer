@@ -25,13 +25,13 @@ async function checkCreateAddress(id: string): Promise<Address> {
 }
 
 export async function handleNewCrab(
-  transferLog: MintBatchTransaction
+  batchTx: MintBatchTransaction
 ): Promise<void> {
   logger.info(
-    "encountered New Crab Mint on block " + transferLog.blockNumber.toString()
+    "encountered New Crab Mint on block " + batchTx.blockNumber.toString()
   );
-  if (transferLog.logs) {
-    const crabLogs = transferLog.logs?.filter((l) =>
+  if (batchTx.logs) {
+    const crabLogs = batchTx.logs?.filter((l) =>
       l.topics.includes(NEW_CRAB_LOG_SIGNATURE)
     ) as NewCrabLog[];
     logger.info(`processing ${crabLogs.length.toString()} crabs`);
