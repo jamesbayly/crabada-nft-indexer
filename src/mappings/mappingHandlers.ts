@@ -1,13 +1,116 @@
 import assert from "assert";
-import { TransferLog } from "../types/abi-interfaces/Erc721";
-import { Collection, Nft, Transfer } from "../types";
+import { Transfer, Address } from "../types";
+import { getTransferId } from "../utils/common";
 import {
-  getCollectionId,
-  getNftId,
-  getTransferId,
-  incrementBigInt,
-} from "../utils/common";
-import { Erc721__factory } from "../types/contracts";
+  MintBatchTransaction,
+  NewCrabLog,
+  TransferLog,
+} from "../types/abi-interfaces/Crabada";
+import { Crabada__factory } from "../types/contracts/factories/Crabada__factory";
+import { Crab } from "../types/models/Crab";
+import { EthereumLog } from "@subql/types-ethereum";
+const CRABADA_DEPLOYER_ADDRESS = "0xe48b3a0Dc82bE39bBa7b895c9ff1d788a54Edc47";
+const NEW_CRAB_LOG_SIGNATURE =
+  "0x8685605608394b7362c2b08010c2f925065dada447fe050634fcddb1bdb05980";
+
+async function checkCreateAddress(id: string): Promise<Address> {
+  let address = await Address.get(id.toLowerCase());
+  if (!address) {
+    address = Address.create({
+      id: id.toLowerCase(),
+    });
+    await address.save();
+  }
+  return address;
+}
+
+export async function handleNewCrab(
+  transferLog: MintBatchTransaction
+): Promise<void> {
+  logger.info(
+    "encountered New Crab Mint on block " + transferLog.blockNumber.toString()
+  );
+  if (transferLog.logs) {
+    const crabLogs = transferLog.logs?.filter((l) =>
+      l.topics.includes(NEW_CRAB_LOG_SIGNATURE)
+    ) as NewCrabLog[];
+    logger.info(`processing ${crabLogs.length.toString()} crabs`);
+    logger.info(JSON.stringify(crabLogs[0]));
+    for (const newCrabLog of crabLogs.filter(
+      (l) => !l.args?.daddyId && !l.args?.mommyId
+    )) {
+      // Process one that don't have a daddy or mommy
+      assert(newCrabLog.args, "Requires args");
+      const erc721Instance = Crabada__factory.connect(newCrabLog.address, api);
+      const account = await checkCreateAddress(newCrabLog.args.account);
+      const minterAddress = await checkCreateAddress(
+        newCrabLog.transaction.from
+      );
+
+      let metadataUri;
+      try {
+        // metadata possibly undefined
+        // nft can share same metadata
+        // if collection.name and symbol exist, meaning there is metadata on this contract
+        metadataUri = await erc721Instance.tokenURI(newCrabLog.args.id);
+      } catch (e) {}
+
+      const nft = Crab.create({
+        id: newCrabLog.args.id.toString(),
+        addressId: account.id,
+        dna: newCrabLog.args.dna.toBigInt(),
+        birthday: newCrabLog.args.birthday.toBigInt(),
+        breeding_count: newCrabLog.args.breedingCount,
+        minted_block: BigInt(newCrabLog.blockNumber),
+        minted_timestamp: newCrabLog.block.timestamp,
+        minter_addressId: minterAddress.id,
+        current_ownerId: account.id,
+        metadata_url: metadataUri,
+      });
+
+      await nft.save();
+    }
+
+    for (const newCrabLog of crabLogs.filter(
+      (l) => l.args?.daddyId || l.args?.mommyId
+    )) {
+      // Process remainder
+      assert(newCrabLog.args, "Requires args");
+      const erc721Instance = Crabada__factory.connect(newCrabLog.address, api);
+      const account = await checkCreateAddress(newCrabLog.args.account);
+      const daddy = await Crab.get(newCrabLog.args.daddyId.toString());
+      const mommy = await Crab.get(newCrabLog.args.mommyId.toString());
+      const minterAddress = await checkCreateAddress(
+        newCrabLog.transaction.from
+      );
+
+      let metadataUri;
+      try {
+        // metadata possibly undefined
+        // nft can share same metadata
+        // if collection.name and symbol exist, meaning there is metadata on this contract
+        metadataUri = await erc721Instance.tokenURI(newCrabLog.args.id);
+      } catch (e) {}
+
+      const nft = Crab.create({
+        id: newCrabLog.args.id.toString(),
+        addressId: account.id,
+        daddyId: daddy?.id,
+        mommyId: mommy?.id,
+        dna: newCrabLog.args.dna.toBigInt(),
+        birthday: newCrabLog.args.birthday.toBigInt(),
+        breeding_count: newCrabLog.args.breedingCount,
+        minted_block: BigInt(newCrabLog.blockNumber),
+        minted_timestamp: newCrabLog.block.timestamp,
+        minter_addressId: minterAddress.id,
+        current_ownerId: account.id,
+        metadata_url: metadataUri,
+      });
+
+      await nft.save();
+    }
+  }
+}
 
 export async function handleERC721(transferLog: TransferLog): Promise<void> {
   logger.info(
@@ -15,90 +118,28 @@ export async function handleERC721(transferLog: TransferLog): Promise<void> {
       transferLog.blockNumber.toString()
   );
 
-  const erc721Instance = Erc721__factory.connect(transferLog.address, api);
-
-  let collection = await Collection.get(
-    getCollectionId(chainId, transferLog.address)
-  );
-  if (!collection) {
-    // Collection is new and needs to be created
-    const [name, symbol, total_supply] = await Promise.all([
-      erc721Instance.name(),
-      erc721Instance.symbol(),
-      erc721Instance.totalSupply(),
-    ]);
-
-    assert(collection, "Missing Collection");
-    collection = Collection.create({
-      id: getCollectionId(chainId, transferLog.address),
-      contract_address: transferLog.address.toLowerCase(),
-      created_block: BigInt(transferLog.blockNumber),
-      created_timestamp: transferLog.block.timestamp,
-      creator_address: transferLog.transaction.from,
-      total_supply: total_supply.toBigInt(),
-      name,
-      symbol,
-    });
-    await collection.save();
-  }
-
-  try {
-  } catch {}
   assert(transferLog.args, "No event args on erc721");
 
-  const nftId = getNftId(collection.id, transferLog.args.tokenId.toString());
+  const nftId = transferLog.args.tokenId.toString();
+  logger.info(nftId);
 
-  let nft: Nft | undefined = await Nft.get(nftId);
-  if (!nft) {
-    // There is not an existing NFT in the store, create a new one
-    let metadataUri;
-    try {
-      // metadata possibly undefined
-      // nft can share same metadata
-      // if collection.name and symbol exist, meaning there is metadata on this contract
-      metadataUri =
-        collection.name || collection.symbol
-          ? await erc721Instance.tokenURI(transferLog.args.tokenId)
-          : undefined;
-    } catch (e) {}
+  let crab = await Crab.get(nftId);
 
-    nft = Nft.create({
-      id: nftId,
-      tokenId: transferLog.args.tokenId.toString(),
-      collectionId: collection.id,
-      minted_block: BigInt(transferLog.blockNumber),
-      minted_timestamp: transferLog.block.timestamp,
-      minter_address: transferLog.transaction.from,
-      current_owner: transferLog.args.to,
-      metadata_url: metadataUri,
-    });
+  assert(crab, "Crab can't be found");
 
-    try {
-      collection.total_supply = (await erc721Instance.totalSupply()).toBigInt();
-    } catch (e) {
-      collection.total_supply = incrementBigInt(collection.total_supply);
-    }
-
-    await Promise.all([collection.save(), nft.save()]);
-  }
+  const fromAddress = await checkCreateAddress(transferLog.args.from);
+  const toAddress = await checkCreateAddress(transferLog.args.to);
 
   // Create the transfer record
-  const transferId = getTransferId(
-    chainId,
-    transferLog.transactionHash,
-    transferLog.logIndex.toString(),
-    0
-  );
-
   const transfer = Transfer.create({
-    id: transferId,
+    id: `${transferLog.transactionHash}-${transferLog.logIndex.toString()}`,
     tokenId: transferLog.args.tokenId.toString(),
     block: BigInt(transferLog.blockNumber),
     timestamp: transferLog.block.timestamp,
     transaction_hash: transferLog.transactionHash,
-    nftId: nft.id,
-    from: transferLog.args.from,
-    to: transferLog.args.to,
+    crabId: crab.id,
+    fromId: fromAddress.id,
+    toId: toAddress.id,
   });
 
   await transfer.save();

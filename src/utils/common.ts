@@ -2,10 +2,6 @@ export function getCollectionId(networkId: string, address: string): string {
   return `${networkId}-${address}`;
 }
 
-export function getNftId(collectionId: string, tokenId: string): string {
-  return `${collectionId}-${tokenId}`;
-}
-
 export function getTransferId(
   networkId: string,
   transactionHash: string,

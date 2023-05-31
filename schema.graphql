@@ -1,24 +1,16 @@
-type Nft @entity {
-  id: ID! #CollectionID-TokenId
-  tokenId: String!
-  collection: Collection!
+type Crab @entity {
+  id: ID!
+  address: Address!
+  daddy: Crab
+  mommy: Crab
+  dna: BigInt!
+  birthday: BigInt!
+  breeding_count: Int!
   minted_block: BigInt! # Should be bigInt
   minted_timestamp: BigInt! # unix epoch timestamp
-  minter_address: String! # event transaction from
-  current_owner: String! # event args to
+  minter_address: Address! # event transaction from
+  current_owner: Address! # event args to
   metadata_url: String
-}
-
-type Collection @entity {
-  id: ID! # chainID-contract adddress
-  contract_address: String! # event address
-  created_block: BigInt!
-  created_timestamp: BigInt! # unix epoch timestamp
-  creator_address: String! # event transaction from
-  total_supply: BigInt!
-  name: String
-  symbol: String
-  #  floor_price: Int # Later on
 }
 
 type Transfer @entity {
@@ -27,11 +19,11 @@ type Transfer @entity {
   block: BigInt
   timestamp: BigInt
   transaction_hash: String # event transaction hash
-  nft: Nft
-  from: String!
-  to: String!
+  crab: Crab
+  from: Address!
+  to: Address!
 }
 
 type Address @entity {
-  id: ID! #network account address ?
+  id: ID! # Address?
 }
