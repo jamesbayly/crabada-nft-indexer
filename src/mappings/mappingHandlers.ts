@@ -24,92 +24,44 @@ async function checkCreateAddress(id: string): Promise<Address> {
   return address;
 }
 
-export async function handleNewCrab(
-  batchTx: MintBatchTransaction
-): Promise<void> {
+export async function handleNewCrab(newCrabLog: NewCrabLog): Promise<void> {
   logger.info(
-    "encountered New Crab Mint on block " + batchTx.blockNumber.toString()
+    "encountered New Crab Log on block " + newCrabLog.blockNumber.toString()
   );
-  if (batchTx.logs) {
-    const crabLogs = batchTx.logs?.filter((l) =>
-      l.topics.includes(NEW_CRAB_LOG_SIGNATURE)
-    ) as NewCrabLog[];
-    logger.info(`processing ${crabLogs.length.toString()} crabs`);
-    logger.info(JSON.stringify(crabLogs[0]));
-    for (const newCrabLog of crabLogs.filter(
-      (l) => !l.args?.daddyId && !l.args?.mommyId
-    )) {
-      // Process one that don't have a daddy or mommy
-      assert(newCrabLog.args, "Requires args");
-      const erc721Instance = Crabada__factory.connect(newCrabLog.address, api);
-      const account = await checkCreateAddress(newCrabLog.args.account);
-      const minterAddress = await checkCreateAddress(
-        newCrabLog.transaction.from
-      );
+  // Process remainder
+  assert(newCrabLog.args, "Requires args");
+  const erc721Instance = Crabada__factory.connect(newCrabLog.address, api);
+  const account = await checkCreateAddress(newCrabLog.args.account);
+  const daddy = await Crab.get(newCrabLog.args.daddyId.toString());
+  const mommy = await Crab.get(newCrabLog.args.mommyId.toString());
+  const minterAddress = await checkCreateAddress(newCrabLog.transaction.from);
 
-      let metadataUri;
-      try {
-        // metadata possibly undefined
-        // nft can share same metadata
-        // if collection.name and symbol exist, meaning there is metadata on this contract
-        metadataUri = await erc721Instance.tokenURI(newCrabLog.args.id);
-      } catch (e) {}
+  let metadataUri;
+  try {
+    // metadata possibly undefined
+    // nft can share same metadata
+    // if collection.name and symbol exist, meaning there is metadata on this contract
+    metadataUri = await erc721Instance.tokenURI(newCrabLog.args.id);
+  } catch (e) {}
 
-      const nft = Crab.create({
-        id: newCrabLog.args.id.toString(),
-        addressId: account.id,
-        dna: newCrabLog.args.dna.toBigInt(),
-        birthday: newCrabLog.args.birthday.toBigInt(),
-        breeding_count: newCrabLog.args.breedingCount,
-        minted_block: BigInt(newCrabLog.blockNumber),
-        minted_timestamp: newCrabLog.block.timestamp,
-        minter_addressId: minterAddress.id,
-        current_ownerId: account.id,
-        metadata_url: metadataUri,
-      });
+  let crab = await Crab.get(newCrabLog.args.id.toString());
+  // Reset crab with new data
+  crab = Crab.create({
+    id: newCrabLog.args.id.toString(),
+    addressId: account.id,
+    daddyId: daddy?.id,
+    mommyId: mommy?.id,
+    dna: newCrabLog.args.dna.toBigInt(),
+    birthday: newCrabLog.args.birthday.toBigInt(),
+    breeding_count: newCrabLog.args.breedingCount,
+    minted_block: BigInt(newCrabLog.blockNumber),
+    minted_timestamp: newCrabLog.block.timestamp,
+    minter_addressId: minterAddress.id,
+    current_ownerId: account.id,
+    metadata_url: metadataUri,
+  });
 
-      await nft.save();
-    }
-
-    for (const newCrabLog of crabLogs.filter(
-      (l) => l.args?.daddyId || l.args?.mommyId
-    )) {
-      // Process remainder
-      assert(newCrabLog.args, "Requires args");
-      const erc721Instance = Crabada__factory.connect(newCrabLog.address, api);
-      const account = await checkCreateAddress(newCrabLog.args.account);
-      const daddy = await Crab.get(newCrabLog.args.daddyId.toString());
-      const mommy = await Crab.get(newCrabLog.args.mommyId.toString());
-      const minterAddress = await checkCreateAddress(
-        newCrabLog.transaction.from
-      );
-
-      let metadataUri;
-      try {
-        // metadata possibly undefined
-        // nft can share same metadata
-        // if collection.name and symbol exist, meaning there is metadata on this contract
-        metadataUri = await erc721Instance.tokenURI(newCrabLog.args.id);
-      } catch (e) {}
-
-      const nft = Crab.create({
-        id: newCrabLog.args.id.toString(),
-        addressId: account.id,
-        daddyId: daddy?.id,
-        mommyId: mommy?.id,
-        dna: newCrabLog.args.dna.toBigInt(),
-        birthday: newCrabLog.args.birthday.toBigInt(),
-        breeding_count: newCrabLog.args.breedingCount,
-        minted_block: BigInt(newCrabLog.blockNumber),
-        minted_timestamp: newCrabLog.block.timestamp,
-        minter_addressId: minterAddress.id,
-        current_ownerId: account.id,
-        metadata_url: metadataUri,
-      });
-
-      await nft.save();
-    }
-  }
+  await crab.save();
 }
 
 export async function handleERC721(transferLog: TransferLog): Promise<void> {
@@ -121,14 +73,29 @@ export async function handleERC721(transferLog: TransferLog): Promise<void> {
   assert(transferLog.args, "No event args on erc721");
 
   const nftId = transferLog.args.tokenId.toString();
-  logger.info(nftId);
-
-  let crab = await Crab.get(nftId);
-
-  assert(crab, "Crab can't be found");
-
   const fromAddress = await checkCreateAddress(transferLog.args.from);
   const toAddress = await checkCreateAddress(transferLog.args.to);
+
+  let crab = await Crab.get(nftId);
+  if (crab) {
+    logger.info(`We have seen crab ${nftId} before`);
+  } else {
+    logger.info(`We have not seen crab ${nftId} before`);
+    const account = await checkCreateAddress(transferLog.address.toLowerCase());
+    const minterAddress = await checkCreateAddress(
+      transferLog.transaction.from
+    );
+    // We create a minimal version so we can proceed
+    crab = Crab.create({
+      id: nftId,
+      addressId: account.id,
+      minted_block: BigInt(transferLog.blockNumber),
+      minted_timestamp: transferLog.block.timestamp,
+      minter_addressId: minterAddress.id,
+      current_ownerId: toAddress.id,
+    });
+    await crab.save();
+  }
 
   // Create the transfer record
   const transfer = Transfer.create({

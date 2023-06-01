@@ -50,7 +50,7 @@ dataSources:
             topics:
               - Transfer(address from, address to, uint256 tokenId)
         - handler: handleNewCrab
-          kind: ethereum/TransactionHandler
+          kind: ethereum/LogHandler
           filter:
-            ## The function can either be the function fragment or signature
-            function: "0x01dac8ac" # MintBatch
+            topics:
+              - NewCrab(address account, uint256 id, uint256 daddyId, uint256 mommyId, uint256 dna, uint64 birthday, uint8 breedingCount)

@@ -3,9 +3,9 @@ type Crab @entity {
   address: Address!
   daddy: Crab
   mommy: Crab
-  dna: BigInt!
-  birthday: BigInt!
-  breeding_count: Int!
+  dna: BigInt
+  birthday: BigInt
+  breeding_count: Int
   minted_block: BigInt! # Should be bigInt
   minted_timestamp: BigInt! # unix epoch timestamp
   minter_address: Address! # event transaction from

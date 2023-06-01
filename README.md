@@ -51,35 +51,11 @@ In the starter package, we have provided a simple example of project configurati
 For more information on how to write the SubQuery,
 check out our doc section on [Define the SubQuery](https://doc.subquery.network/define_a_subquery.html)
 
-#### Code generation
+## Run the Project
 
-In order to index your SubQuery project, it is mandatory to build your project first.
-Run this command under the project directory.
+`yarn dev`
 
-```
-yarn codegen
-```
-
-## Build the project
-
-In order to deploy your SubQuery project to our hosted service, it is mandatory to pack your configuration before upload.
-Run pack command from root directory of your project will automatically generate a `your-project-name.tgz` file.
-
-```
-yarn build
-```
-
-## Indexing and Query
-
-#### Run required systems in docker
-
-Under the project directory run following command:
-
-```
-docker-compose pull && docker-compose up
-```
-
-#### Query the project
+## Query the project
 
 Open your browser and head to `http://localhost:3000`.
 
@@ -88,18 +64,28 @@ Finally, you should see a GraphQL playground is showing in the explorer and the 
 For the `subql-starter` project, you can try to query with the following code to get a taste of how it works.
 
 ```graphql
-{
-  query {
-    transactions(first: 2, orderBy: BLOCK_HEIGHT_ASC) {
-      totalCount
-      nodes {
-        id
-        txHash
-        blockHeight
-        to
-        from
-        value
-        contractAddress
+query {
+  crabs(first: 5, orderBy: TRANSFERS_COUNT_DESC) {
+    totalCount
+    nodes {
+      id
+      addressId
+      daddyId
+      mommyId
+      dna
+      birthday
+      breedingCount
+      mintedBlock
+      mintedTimestamp
+      currentOwnerId
+      minterAddressId
+      metadataUrl
+      transfers(first: 5, orderBy: BLOCK_DESC) {
+        totalCount
+        nodes {
+          transactionHash
+          block
+        }
       }
     }
   }
