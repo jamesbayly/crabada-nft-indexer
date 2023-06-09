@@ -10,7 +10,7 @@ runner:
     name: "@subql/query"
     version: "*"
 description: "This project indexes all Crabada NFTs on Avalanche's C-chain"
-repository: "https://github.com/jamesbayly/crabada-nft-indexer"
+repository: "https://github.com/subquery/subquery-example-avalanche-crabada-nft"
 
 schema:
   file: "./schema.graphql"

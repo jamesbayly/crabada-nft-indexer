@@ -11,8 +11,8 @@
     "prepack": "rm -rf dist && npm run build",
     "test": "subql build && subql-node-ethereum test"
   },
-  "homepage": "https://github.com/jamesbayly/crabada-nft-indexer",
-  "repository": "github:jamesbayly/crabada-nft-indexer",
+  "homepage": "https://github.com/subquery/subquery-example-avalanche-crabada-nft",
+  "repository": "github:subquery/subquery-example-avalanche-crabada-nft",
   "files": [
     "dist",
     "schema.graphql",
